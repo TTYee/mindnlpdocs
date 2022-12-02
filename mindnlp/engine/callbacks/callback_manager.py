@@ -35,25 +35,19 @@ def _transfer(func):
     return wrapper
 
 class CallbackManager(Callback):
-    """Callback Manager."""
+    """
+    Callback Manager.
 
-    def __init__(self, callbacks=None):
-        self.callbacks = []
-        if callbacks:
-            self.prepare_callbacks(callbacks)
+    Args:
+        callbacks (Optional[list[Callback], Callback]): List of callback objects which should be executed
+            while training. Default: None.
 
-    def prepare_callbacks(self, callbacks):
-        """Check callback type."""
-        if isinstance(callbacks, Callback):
-            self.callbacks.append(callbacks)
-        elif isinstance(callbacks, list):
-            if all(isinstance(cb, Callback) for cb in callbacks) is True:
-                self.callbacks = callbacks
-            else:
-                obj = [not isinstance(cb, Callback) for cb in callbacks][0]
-                raise TypeError(f"Expect sub-classes of Callback. Got {type(obj)}")
-        else:
-            raise TypeError(f"Expect callbacks in CallbackManager to be list or Callback. Got {type(callbacks)}.")
+    """
+
+    def __init__(self, callbacks):
+        self.callbacks = callbacks
+        if callbacks is None:
+            self.callbacks = []
 
     @_transfer
     def train_begin(self, run_context):
@@ -81,11 +75,27 @@ class CallbackManager(Callback):
 
     @_transfer
     def train_step_begin(self, run_context):
-        """Called before each step beginning."""
+        """Called before each train step beginning."""
 
     @_transfer
     def train_step_end(self, run_context):
+        """Called after each train step finished."""
+
+    @_transfer
+    def forward_begin(self, run_context):
+        """Called before each forward beginning."""
+
+    @_transfer
+    def forward_end(self, run_context):
         """Called after each step finished."""
+
+    @_transfer
+    def backward_begin(self, run_context):
+        """Called before each forward beginning."""
+
+    @_transfer
+    def backward_end(self, run_context):
+        """Called after each backward finished."""
 
     @_transfer
     def ds_sink_begin(self, run_context):
@@ -104,28 +114,12 @@ class CallbackManager(Callback):
         """Called before saving model."""
 
     @_transfer
-    def load_checkpoint(self, run_context):
-        """Called before loading checkpoint."""
-
-    @_transfer
-    def save_checkpoint(self, run_context):
-        """Called before saving checkpoint."""
-
-    @_transfer
     def evaluate_begin(self, run_context):
-        """Called before evaluating epoch/steps/ds_size."""
+        """Called before evaluating."""
 
     @_transfer
     def evaluate_end(self, run_context):
-        """Called after evaluating epoch/steps/ds_size."""
-
-    @_transfer
-    def before_optimizer_step(self, run_context):
-        """Called before optimizing."""
-
-    @_transfer
-    def after_optimizer_step(self, run_context):
-        """Called after optimizing."""
+        """Called after evaluating."""
 
     @_transfer
     def exception(self, run_context):

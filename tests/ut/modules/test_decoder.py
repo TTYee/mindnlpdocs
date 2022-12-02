@@ -20,10 +20,11 @@ import unittest
 import numpy as np
 
 import mindspore
+from mindspore import nn
 from mindspore import context
 from mindspore import Tensor
 
-from mindnlp.modules import RNNDecoder, LSTMDecoder, GRUDecoder
+from mindnlp.modules import RNNDecoder
 
 
 class TestRNNDecoder(unittest.TestCase):
@@ -37,11 +38,30 @@ class TestRNNDecoder(unittest.TestCase):
         """
         context.set_context(mode=context.GRAPH_MODE)
 
-        rnn_decoder = RNNDecoder(1000, 32, 16, num_layers=2, has_bias=True,
-                                 dropout=0.1, attention=True, encoder_output_units=16)
+        vocab_size = 1000
+        embedding_size = 32
+        hidden_size = 16
+        num_layers = 2
+        dropout_in = 0.1
+        dropout_out = 0.1
+        encoder_output_units = 16
+        embedding = nn.Embedding(vocab_size, embedding_size)
+        input_feed_size = 0 if encoder_output_units == 0 else hidden_size
+        rnns = [
+            nn.RNNCell(
+                input_size=embedding_size + input_feed_size
+                if layer == 0
+                    else hidden_size,
+                hidden_size=hidden_size
+                )
+                for layer in range(num_layers)
+        ]
+
+        rnn_decoder = RNNDecoder(embedding, rnns, dropout_in=dropout_in, dropout_out=dropout_out,
+                                 attention=True, encoder_output_units=encoder_output_units, mode="RNN")
 
         tgt_tokens = Tensor(np.ones([8, 16]), mindspore.int32)
-        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.int32)
+        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.float32)
         hiddens_n = Tensor(np.ones([2, 8, 16]), mindspore.float32)
         mask = Tensor(np.ones([8, 16]), mindspore.int32)
 
@@ -56,11 +76,30 @@ class TestRNNDecoder(unittest.TestCase):
         """
         context.set_context(mode=context.PYNATIVE_MODE)
 
-        rnn_decoder = RNNDecoder(1000, 32, 16, num_layers=2, has_bias=True,
-                                 dropout=0.1, attention=True, encoder_output_units=16)
+        vocab_size = 1000
+        embedding_size = 32
+        hidden_size = 16
+        num_layers = 2
+        dropout_in = 0.1
+        dropout_out = 0.1
+        encoder_output_units = 16
+        embedding = nn.Embedding(vocab_size, embedding_size)
+        input_feed_size = 0 if encoder_output_units == 0 else hidden_size
+        rnns = [
+            nn.RNNCell(
+                input_size=embedding_size + input_feed_size
+                if layer == 0
+                    else hidden_size,
+                hidden_size=hidden_size
+                )
+                for layer in range(num_layers)
+        ]
+
+        rnn_decoder = RNNDecoder(embedding, rnns, dropout_in=dropout_in, dropout_out=dropout_out,
+                                 attention=True, encoder_output_units=encoder_output_units, mode="RNN")
 
         tgt_tokens = Tensor(np.ones([8, 16]), mindspore.int32)
-        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.int32)
+        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.float32)
         hiddens_n = Tensor(np.ones([2, 8, 16]), mindspore.float32)
         mask = Tensor(np.ones([8, 16]), mindspore.int32)
 
@@ -81,11 +120,30 @@ class TestLSTMDecoder(unittest.TestCase):
         """
         context.set_context(mode=context.GRAPH_MODE)
 
-        lstm_decoder = LSTMDecoder(1000, 32, 16, num_layers=2, has_bias=True,
-                                   dropout=0.1, attention=True, encoder_output_units=16)
+        vocab_size = 1000
+        embedding_size = 32
+        hidden_size = 16
+        num_layers = 2
+        dropout_in = 0.1
+        dropout_out = 0.1
+        encoder_output_units = 16
+        embedding = nn.Embedding(vocab_size, embedding_size)
+        input_feed_size = 0 if encoder_output_units == 0 else hidden_size
+        lstms = [
+            nn.LSTMCell(
+                input_size=embedding_size + input_feed_size
+                if layer == 0
+                    else hidden_size,
+                hidden_size=hidden_size
+                )
+                for layer in range(num_layers)
+        ]
+
+        lstm_decoder = RNNDecoder(embedding, lstms, dropout_in=dropout_in, dropout_out=dropout_out,
+                                 attention=True, encoder_output_units=encoder_output_units, mode="LSTM")
 
         tgt_tokens = Tensor(np.ones([8, 16]), mindspore.int32)
-        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.int32)
+        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.float32)
         hiddens_n = Tensor(np.ones([2, 8, 16]), mindspore.float32)
         cells_n = Tensor(np.ones([2, 8, 16]), mindspore.float32)
         hx_n = (hiddens_n, cells_n)
@@ -100,13 +158,32 @@ class TestLSTMDecoder(unittest.TestCase):
         """
         Test lstm decoder module in pynative mode
         """
-        context.set_context(mode=context.GRAPH_MODE)
+        context.set_context(mode=context.PYNATIVE_MODE)
 
-        lstm_decoder = LSTMDecoder(1000, 32, 16, num_layers=2, has_bias=True,
-                                   dropout=0.1, attention=True, encoder_output_units=16)
+        vocab_size = 1000
+        embedding_size = 32
+        hidden_size = 16
+        num_layers = 2
+        dropout_in = 0.1
+        dropout_out = 0.1
+        encoder_output_units = 16
+        embedding = nn.Embedding(vocab_size, embedding_size)
+        input_feed_size = 0 if encoder_output_units == 0 else hidden_size
+        lstms = [
+            nn.LSTMCell(
+                input_size=embedding_size + input_feed_size
+                if layer == 0
+                    else hidden_size,
+                hidden_size=hidden_size
+                )
+                for layer in range(num_layers)
+        ]
+
+        lstm_decoder = RNNDecoder(embedding, lstms, dropout_in=dropout_in, dropout_out=dropout_out,
+                                 attention=True, encoder_output_units=encoder_output_units, mode="LSTM")
 
         tgt_tokens = Tensor(np.ones([8, 16]), mindspore.int32)
-        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.int32)
+        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.float32)
         hiddens_n = Tensor(np.ones([2, 8, 16]), mindspore.float32)
         cells_n = Tensor(np.ones([2, 8, 16]), mindspore.float32)
         hx_n = (hiddens_n, cells_n)
@@ -129,11 +206,30 @@ class TestGRUDecoder(unittest.TestCase):
         """
         context.set_context(mode=context.GRAPH_MODE)
 
-        gru_decoder = GRUDecoder(1000, 32, 16, num_layers=2, has_bias=True,
-                                 dropout=0.1, attention=True, encoder_output_units=16)
+        vocab_size = 1000
+        embedding_size = 32
+        hidden_size = 16
+        num_layers = 2
+        dropout_in = 0.1
+        dropout_out = 0.1
+        encoder_output_units = 16
+        embedding = nn.Embedding(vocab_size, embedding_size)
+        input_feed_size = 0 if encoder_output_units == 0 else hidden_size
+        grus = [
+            nn.GRUCell(
+                input_size=embedding_size + input_feed_size
+                if layer == 0
+                    else hidden_size,
+                hidden_size=hidden_size
+                )
+                for layer in range(num_layers)
+        ]
+
+        gru_decoder = RNNDecoder(embedding, grus, dropout_in=dropout_in, dropout_out=dropout_out,
+                                 attention=True, encoder_output_units=encoder_output_units, mode="GRU")
 
         tgt_tokens = Tensor(np.ones([8, 16]), mindspore.int32)
-        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.int32)
+        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.float32)
         hiddens_n = Tensor(np.ones([2, 8, 16]), mindspore.float32)
         mask = Tensor(np.ones([8, 16]), mindspore.int32)
 
@@ -148,11 +244,30 @@ class TestGRUDecoder(unittest.TestCase):
         """
         context.set_context(mode=context.PYNATIVE_MODE)
 
-        gru_decoder = GRUDecoder(1000, 32, 16, num_layers=2, has_bias=True,
-                                 dropout=0.1, attention=True, encoder_output_units=16)
+        vocab_size = 1000
+        embedding_size = 32
+        hidden_size = 16
+        num_layers = 2
+        dropout_in = 0.1
+        dropout_out = 0.1
+        encoder_output_units = 16
+        embedding = nn.Embedding(vocab_size, embedding_size)
+        input_feed_size = 0 if encoder_output_units == 0 else hidden_size
+        grus = [
+            nn.GRUCell(
+                input_size=embedding_size + input_feed_size
+                if layer == 0
+                    else hidden_size,
+                hidden_size=hidden_size
+                )
+                for layer in range(num_layers)
+        ]
+
+        gru_decoder = RNNDecoder(embedding, grus, dropout_in=dropout_in, dropout_out=dropout_out,
+                                 attention=True, encoder_output_units=encoder_output_units, mode="GRU")
 
         tgt_tokens = Tensor(np.ones([8, 16]), mindspore.int32)
-        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.int32)
+        encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.float32)
         hiddens_n = Tensor(np.ones([2, 8, 16]), mindspore.float32)
         mask = Tensor(np.ones([8, 16]), mindspore.int32)
 

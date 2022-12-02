@@ -16,133 +16,225 @@
 
 import os
 import re
-import zipfile
-import tarfile
-import mindspore
+import json
+import logging
+from itertools import islice
+import numpy as np
 from mindspore import nn
-import mindspore.numpy as mnp
 from mindspore import ops
 from mindspore import Tensor
 from mindspore.dataset.text.utils import Vocab
-from mindnlp.utils import download
+from mindnlp.utils import cache_file, unzip
 from mindnlp.abc.modules.embedding import TokenEmbedding
+from mindnlp.configs import DEFAULT_ROOT
+
+JSON_FILENAME = 'glove_hyper.json'
+EMBED_FILENAME = 'glove.txt'
+logging.getLogger().setLevel(logging.INFO)
 
 
 class Glove(TokenEmbedding):
     r"""
     Create vocab and Embedding from a given pre-trained vector file.
-    """
-    def __init__(self, vocab: Vocab, init_embed, requires_grad: bool = True, dropout=0.5, word_dropout=0):
-        r"""
-        Initize Vocab and Embedding by a given pre-trained word embedding.
 
-        Args:
-            init_embed : Passing into Tensor, Embedding, Numpy.ndarray, etc.,
-                        use this value to initialize Embedding directly.
-            requires_grad : Whether this parameter needs to be gradient to update.
-            dropout : Dropout of the output of Embedding.
-            word_dropout : How much is the probability of replacing a word to UNK.
-        """
+    Args:
+        vocab (Vocab): Passins into Vocab for initialization.
+        init_embed (Tensor): Passing into Tensor,use these values to initialize Embedding directly.
+        requires_grad (bool): Whether this parameter needs to be gradient to update. Default: True.
+        dropout (float): Dropout of the output of Embedding. Default: 0.5.
+
+    Examples:
+        >>> vocab = Vocab.from_list(['default','one','two','three'])
+        >>> init_embed = Tensor(np.zeros((4, 4)).astype(np.float32))
+        >>> glove_embed = Glove(vocab, init_embed)
+        >>> ids = Tensor([1, 2, 3])
+        >>> output = glove_embed(ids)
+
+    """
+    urls = {
+        "42B": "http://nlp.stanford.edu/data/glove.42B.300d.zip",
+        "840B": "http://nlp.stanford.edu/data/glove.840B.300d.zip",
+        "twitter.27B": "http://nlp.stanford.edu/data/glove.twitter.27B.zip",
+        "6B": "http://nlp.stanford.edu/data/glove.6B.zip",
+    }
+
+    dims = [50, 100, 200, 300]
+
+    def __init__(self, vocab: Vocab, init_embed, requires_grad: bool = True, dropout=0.0):
         super().__init__(vocab, init_embed)
 
-        self.vocab_list = vocab
+        self._word_vocab = vocab
         self.vocab_size = init_embed.shape[0]
         self.embed = init_embed
-        self._embed_size = init_embed.shape[1]
+        self._embed_dim = init_embed.shape[1]
+        self._embed_size = init_embed.shape
         self.requires_grad = requires_grad
-        self.dropout = nn.Dropout(dropout)
-        self.word_dropout = word_dropout
+        self.dropout_layer = nn.Dropout(1 - dropout)
+        self.dropout_p = dropout
 
     @classmethod
-    def from_pretrained(cls, url: str):
+    def from_pretrained(cls, name='6B', dims=300, root=DEFAULT_ROOT,
+                        special_tokens=("<pad>", "<unk>"), special_first=True, **kwargs):
         r"""
         Creates Embedding instance from given 2-dimensional FloatTensor.
 
         Args:
-            url (str) : url to download file.
+            name (str): The name of the pretrained vector. Default: '6B'.
+            dims (int): The dimension of the pretrained vector. Default: 300.
+            root (str): Default storage directory. Default: DEFAULT_ROOT.
+            special_tokens (tuple<str,str>): List of special participles. Default: ("<pad>", "<unk>").
+            special_first (bool): Indicates whether special participles from special_tokens will be added to
+                the top of the dictionary. If True, add special_tokens to the beginning of the dictionary,
+                otherwise add them to the end. Default: True.
+            kwargs (dict):
+                - requires_grad (bool): Whether this parameter needs to be gradient to update.
+                - dropout (float): Dropout of the output of Embedding.
+
         Returns:
-            - ** vocab ** - Vocabulary extracted from the file.
-            - ** embeddings ** - Word vector extracted from the file.
+            - Glove, Returns an embedding instance generated through a pretrained word vector.
+            - Vocab, Vocabulary extracted from the file.
 
         """
-        file_name = re.sub(r".+/", "", url)
-        download.cache_file(filename=file_name, cache_dir=None, url=url)
-        cache_dir = download.get_cache_path()
+        if name not in cls.urls:
+            raise ValueError(f"The argument 'name' must in {cls.urls.keys()}, but got {name}.")
+        if dims not in cls.dims:
+            raise ValueError(f"The argument 'dims' must in {cls.dims}, but got {dims}.")
+        cache_dir = os.path.join(root, "embeddings", "Glove")
 
-        suffix = ''
-        if file_name.endswith('.tar.gz'):
-            suffix = '.tar.gz'
-        elif file_name.endswith('.zip'):
-            suffix = '.zip'
+        url = cls.urls[name]
+        download_file_name = re.sub(r".+/", "", url)
+        glove_file_name = f"glove.{name}.{dims}d.txt"
+        path, _ = cache_file(filename=download_file_name, cache_dir=cache_dir, url=url)
+        decompress_path = os.path.join(cache_dir, glove_file_name)
+        if not os.path.exists(decompress_path):
+            unzip(path, cache_dir)
 
-        name_rar = file_name
-        name_dir = name_rar.replace(suffix, '')
-        glove_dir_path = os.path.join(cache_dir, name_dir)
-        glove_compress_path = os.path.join(cache_dir, file_name)
-
-        if not os.path.isdir(glove_dir_path):
-            if suffix == '.tar.gz':
-                glove_tar = tarfile.open(glove_compress_path, 'r')
-                glove_tar.extractall(cache_dir)
-                glove_tar.close()
-            elif file_name == '.zip':
-                glove_zip = zipfile.ZipFile(glove_compress_path)
-                glove_zip.extractall(cache_dir)
-                glove_zip.close()
-
-        file_suffix = ''
-        if os.path.isdir(glove_dir_path):
-            while os.path.isdir(glove_dir_path):
-                next_dir_path = os.path.join(glove_dir_path, name_dir)
-                if not os.path.isdir(next_dir_path):
-                    for file in os.listdir(glove_dir_path):
-                        if file.startswith(name_dir):
-                            file_suffix = os.path.splitext(file)[-1]
-                    break
-                glove_dir_path = next_dir_path
-            name_txt = name_dir + '.50d' + file_suffix
-            glove_file_path = os.path.join(glove_dir_path, name_txt)
-        else:
-            for file in os.listdir(cache_dir):
-                if file.startswith(name_dir):
-                    file_suffix = os.path.splitext(file)[-1]
-                    break
-            name_txt = name_dir + '.50d' + file_suffix
-            glove_file_path = os.path.join(cache_dir, name_txt)
+        glove_file_path = os.path.join(cache_dir, glove_file_name)
 
         embeddings = []
         tokens = []
         with open(glove_file_path, encoding='utf-8') as file:
-            for glove in file:
-                word, embedding = glove.split(maxsplit=1)
+            for line in file:
+                word, embedding = line.split(maxsplit=1)
                 tokens.append(word)
-                arr = embedding.split(' ')
-                float_arr = list(map(float, arr))
-                float_tensor = Tensor(float_arr)
-                float32_arr = mnp.asfarray(float_tensor)
+                embeddings.append(np.fromstring(embedding, dtype=np.float32, sep=' '))
 
-                embeddings.append(float32_arr)
+        if special_first:
+            embeddings.insert(0, np.random.rand(dims))
+            embeddings.insert(1, np.zeros((dims,), np.float32))
+        else:
+            embeddings.append(np.random.rand(dims))
+            embeddings.append(np.zeros((dims,), np.float32))
 
-        embeddings.append(mnp.rand(50))
-        embeddings.append(mnp.zeros((50,), mindspore.float32))
+        vocab = Vocab.from_list(tokens, list(special_tokens), special_first)
+        embeddings = np.array(embeddings).astype(np.float32)
 
-        vocab = Vocab.from_list(tokens, special_tokens=["<unk>", "<pad>"], special_first=False)
-        embeddings = mnp.array(embeddings).astype(mindspore.float32)
-        return cls(vocab, Tensor(embeddings), True, 0.5, 0)
+        requires_grad = kwargs.get('requires_grad', True)
+        dropout = kwargs.get('dropout', 0.0)
+
+        return cls(vocab, Tensor(embeddings), requires_grad, dropout), vocab
 
     def construct(self, ids):
         r"""
-        Use ids to query embedding
+
         Args:
-            ids : Ids to query.
+            ids (Tensor): Ids to query.
 
         Returns:
-            - ** compute result ** - Tensor, returns the Embedding query results.
+            - Tensor, returns the Embedding query results.
 
         """
-        tensor_ids = Tensor(ids)
-        out_shape = tensor_ids.shape + (self._embed_size,)
-        flat_ids = tensor_ids.reshape((-1,))
+        out_shape = ids.shape + (self._embed_dim,)
+        flat_ids = ids.reshape((-1,))
         output_for_reshape = ops.gather(self.embed, flat_ids, 0)
         output = ops.reshape(output_for_reshape, out_shape)
-        return output
+        return self.dropout(output)
+
+    def save(self, foldername, root=DEFAULT_ROOT):
+        r"""
+        Save the embedding to the specified location.
+
+        Args:
+            foldername (str): Name of the folder to store.
+            root (Path): Path of the embedding folder. Default: DEFAULT_ROOT.
+
+        Returns:
+            None
+
+        """
+
+        folder = os.path.join(root, 'embeddings', 'Glove', 'save', foldername)
+        os.makedirs(folder, exist_ok=True)
+
+        vocab = self.get_word_vocab()
+        embed = self.embed
+        embed_list = embed
+        vocab_list = list(vocab.keys())
+        nums = self.vocab_size
+        dims = self._embed_dim
+
+        kwargs = {}
+        kwargs['dropout'] = kwargs.get('dropout', self.dropout_p)
+        kwargs['requires_grad'] = kwargs.get('requires_grad', self.requires_grad)
+
+        with open(os.path.join(folder, JSON_FILENAME), 'w', encoding='utf-8') as file:
+            json.dump(kwargs, file, indent=2)
+
+        with open(os.path.join(folder, EMBED_FILENAME), 'w', encoding='utf-8') as file:
+            file.write(f'{" " * 30}\n')
+            for i in range(0, nums):
+                vocab_write = vocab_list[i]
+                embed_write = list(embed_list[i])
+                vec_write = ' '.join(map(str, embed_write))
+                file.write(f'{vocab_write} {vec_write}\n')
+
+            file.seek(0)
+            file.write(f'{nums} {dims}')
+
+        logging.info('Embedding has been saved to %s', folder)
+
+    @classmethod
+    def load(cls, foldername=None, root=DEFAULT_ROOT, load_npy=False, vocab=None, npy_path=None):
+        r"""
+        Load embedding from the specified location.
+
+        Args:
+            foldername (str): Name of the folder to load. Default: None.
+            root (Path): Path of the embedding folder. Default: DEFAULT_ROOT.
+            load_npy (Bool): Whether to initialize the embedding as a npy file. Vocab and npy_path are valid
+                when load_npy is True. Default: False.
+            vocab (Vocab): If initialized with a npy file, pass in vocab. Default: None.
+            npy_path (Path): Location of the npy file. Default: None.
+
+        Returns:
+            None
+
+        """
+
+        if load_npy:
+            load_embed = np.load(npy_path)
+            load_vocab = vocab
+
+            return cls(load_vocab, Tensor(load_embed))
+
+        folder = os.path.join(root, 'embeddings', 'Glove', 'save', foldername)
+        for name in [JSON_FILENAME, EMBED_FILENAME]:
+            assert os.path.exists(os.path.join(folder, name)), f"{name} not found in {folder}."
+
+        with open(os.path.join(folder, JSON_FILENAME), 'r', encoding='utf-8') as file:
+            hyper = json.load(file)
+
+        embeddings = []
+        tokens = []
+        with open(os.path.join(folder, EMBED_FILENAME), encoding='utf-8') as file:
+            for line in islice(file, 1, None):
+                word, embedding = line.split(maxsplit=1)
+                tokens.append(word)
+                embeddings.append(np.fromstring(embedding, dtype=np.float32, sep=' '))
+
+        vocab = Vocab.from_list(tokens)
+        embeddings = np.array(embeddings).astype(np.float32)
+
+        logging.info("Load embedding from %s", folder)
+
+        return cls(vocab, Tensor(embeddings), **hyper)

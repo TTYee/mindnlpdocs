@@ -17,9 +17,20 @@ TextClassification dataset init
 """
 
 from .agnews import AG_NEWS, AG_NEWS_Process
-from .cola import CoLA
-from .sst2 import SST2
-from .amazonreviewfull import AmazonReviewFull
-from .amazonreviewpolarity import AmazonReviewPolarity
-from .stsb import STSB
-from .dbpedia import DBpedia
+from .cola import CoLA, CoLA_Process
+from .sst2 import SST2, SST2_Process
+from .amazonreviewfull import AmazonReviewFull, AmazonReviewFull_Process
+from .amazonreviewpolarity import AmazonReviewPolarity, AmazonReviewPolarity_Process
+from .stsb import STSB, STSB_Process
+from .dbpedia import DBpedia, DBpedia_Process
+from .imdb import IMDB
+from .mnli import MNLI, MNLI_Process
+from .mrpc import MRPC, MRPC_Process
+from .qnli import QNLI, QNLI_Process
+from .qqp import QQP, QQP_Process
+from .wnli import WNLI, WNLI_Process
+from .rte import RTE, RTE_Process
+from .sogounews import SogouNews
+from .yelpreviewpolarity import YelpReviewPolarity, YelpReviewPolarity_Process
+from .yelpreviewfull import YelpReviewFull, YelpReviewFull_Process
+from .yahooanswers import YahooAnswers, YahooAnswers_Process

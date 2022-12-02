@@ -16,9 +16,13 @@
 Test CoLA
 """
 import os
+import shutil
 import unittest
-from mindnlp.dataset import CoLA
-from mindnlp.dataset import load
+import pytest
+import mindspore as ms
+from mindnlp.dataset import CoLA, CoLA_Process
+from mindnlp.dataset import load, process
+from mindnlp.dataset.transforms import BasicTokenizer
 
 
 class TestCoLA(unittest.TestCase):
@@ -26,9 +30,15 @@ class TestCoLA(unittest.TestCase):
     Test CoLA
     """
 
-    def setUp(self):
-        self.input = None
+    @classmethod
+    def setUpClass(cls):
+        cls.root = os.path.join(os.path.expanduser("~"), ".mindnlp")
 
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.root)
+
+    @pytest.mark.dataset
     def test_cola(self):
         """Test cola"""
         num_lines = {
@@ -36,26 +46,59 @@ class TestCoLA(unittest.TestCase):
             "dev": 527,
             "test": 516,
         }
-        root = os.path.join(os.path.expanduser("~"), ".mindnlp")
         dataset_train, dataset_dev, dataset_test = CoLA(
-            root=root, split=("train", "dev", "test")
+            root=self.root, split=("train", "dev", "test")
         )
         assert dataset_train.get_dataset_size() == num_lines["train"]
         assert dataset_dev.get_dataset_size() == num_lines["dev"]
         assert dataset_test.get_dataset_size() == num_lines["test"]
 
-        dataset_train = CoLA(root=root, split="train")
-        dataset_dev = CoLA(root=root, split="dev")
-        dataset_test = CoLA(root=root, split="test")
+        dataset_train = CoLA(root=self.root, split="train")
+        dataset_dev = CoLA(root=self.root, split="dev")
+        dataset_test = CoLA(root=self.root, split="test")
         assert dataset_train.get_dataset_size() == num_lines["train"]
         assert dataset_dev.get_dataset_size() == num_lines["dev"]
         assert dataset_test.get_dataset_size() == num_lines["test"]
 
-    def test_agnews_by_register(self):
-        """test agnews by register"""
-        root = os.path.join(os.path.expanduser("~"), ".mindnlp")
+    @pytest.mark.dataset
+    def test_cola_by_register(self):
+        """test cola by register"""
         _ = load(
             "CoLA",
-            root=root,
+            root=self.root,
             split=("train", "dev", "test"),
         )
+
+    @pytest.mark.dataset
+    def test_cola_process(self):
+        r"""
+        Test CoLA_Process
+        """
+
+        train_dataset, _, _ = CoLA()
+        train_dataset, vocab = CoLA_Process(train_dataset)
+
+        train_dataset = train_dataset.create_tuple_iterator()
+        assert (next(train_dataset)[2]).dtype == ms.int32
+
+        for _, value in vocab.vocab().items():
+            assert isinstance(value, int)
+            break
+
+    @pytest.mark.dataset
+    def test_cola_process_by_register(self):
+        """test cola process by register"""
+        train_dataset, _, _ = CoLA()
+        train_dataset, vocab = process('CoLA',
+                                dataset=train_dataset,
+                                column="sentence",
+                                tokenizer=BasicTokenizer(),
+                                vocab=None
+                                )
+
+        train_dataset = train_dataset.create_tuple_iterator()
+        assert (next(train_dataset)[2]).dtype == ms.int32
+
+        for _, value in vocab.vocab().items():
+            assert isinstance(value, int)
+            break

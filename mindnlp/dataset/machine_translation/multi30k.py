@@ -21,7 +21,8 @@ import os
 import re
 from operator import itemgetter
 from typing import Union, Tuple
-from mindspore.dataset import text, TextFileDataset
+from mindspore.dataset import TextFileDataset, transforms
+from mindspore.dataset import text
 from mindnlp.utils.download import cache_file
 from mindnlp.dataset.register import load, process
 from mindnlp.configs import DEFAULT_ROOT
@@ -53,11 +54,12 @@ def Multi30k(root: str = DEFAULT_ROOT, split: Union[Tuple[str], str] = ('train',
             Default:('train', 'valid', 'test').
         language_pair (Tuple[str]): Tuple containing src and tgt language.
             Default: ('de', 'en').
+        proxies (dict): a dict to identify proxies,for example: {"https": "https://127.0.0.1:7890"}.
 
     Returns:
         - **datasets_list** (list) -A list of loaded datasets.
-            If only one type of dataset is specified,such as 'trian',
-            this dataset is returned instead of a list of datasets.
+          If only one type of dataset is specified,such as 'trian',
+          this dataset is returned instead of a list of datasets.
 
     Raises:
         TypeError: If `root` is not a string.
@@ -140,45 +142,52 @@ def Multi30k(root: str = DEFAULT_ROOT, split: Union[Tuple[str], str] = ('train',
     return datasets_list
 
 @process.register
-def Multi30k_Process(dataset, tokenizer = text.BasicTokenizer(), language = 'en', vocab=None):
-    '''
-    a function transforms multi30K dataset into tensors
+def Multi30k_Process(dataset, vocab, batch_size=64, max_len=500, \
+                drop_remainder=False):
+    """
+    the process of the IMDB dataset
 
     Args:
-        dataset (ZipDataset): Multi30K dataset
-        tokenizer (TextTensorOperation): Tokenizer you what to used
-        language (str): The language column name in multi30K, 'de' or 'en', defaults to 'en'
-        vocab (Vocab): The vocab you use, defaults to None. If None, a new vocab will be created.
+        dataset (GeneratorDataset): IMDB dataset.
+        vocab (Vocab): vocabulary object, used to store the mapping of token and index.
 
     Returns:
-        - **dataset** (MapDataset) -dataset after process
-        - **newVocab** (Vocab) -new vocab created from dataset
+        - **dataset** (MapDataset) - dataset after transforms.
 
     Raises:
-        AssertionError: arg `language` not in ['en', 'de']
-        TypeError: If `language` is not a string.
+        TypeError: If `input_column` is not a string.
 
     Examples:
-        >>> from mindnlp.dataset import Multi30k_Process
-        >>> test_dataset = Multi30k(
-        >>>     root="./dataset",
-        >>>     split="test",
+        >>> train_dataset = Multi30k(
+        >>>     root=self.root,
+        >>>     split="train",
         >>>     language_pair=("de", "en")
         >>> )
-        >>> test_dataset, vocab = Multi30k_Process(test_dataset, text.BasicTokenizer(), "en")
-        >>> for i in test_dataset.create_tuple_iterator():
-        >>>     print(i)
-        >>>     break
-        [Tensor(shape=[], dtype=String, value= 'Ein Mann mit einem orangefarbenen Hut, \
-            der etwas anstarrt.'), Tensor(shape=[10], dtype=Int32, value= [   2,    8,    3,   \
-            24,   90,   82, 1783,   15,  131,    1])]
-    '''
+        >>> tokenizer = BasicTokenizer(True)
+        >>> train_dataset = train_dataset.map([tokenizer], 'en')
+        >>> train_dataset = train_dataset.map([tokenizer], 'de')
+        >>> en_vocab = text.Vocab.from_dataset(train_dataset, 'en', special_tokens=
+        >>>   ['<pad>', '<unk>'], special_first= True)
+        >>> de_vocab = text.Vocab.from_dataset(train_dataset, 'de', special_tokens=
+        >>>   ['<pad>', '<unk>'], special_first= True)
+        >>> vocab = {'en':en_vocab, 'de':de_vocab}
+        >>> train_dataset = process('Multi30k', train_dataset, vocab = vocab)
+    """
 
-    assert language in ['en', 'de'], "language not in ['en', 'de']"
-    if vocab is None :
-        dataset = dataset.map(tokenizer, language)
-        newVocab = text.Vocab.from_dataset(dataset, language)
-        return dataset.map(text.Lookup(newVocab), language), newVocab
+    en_pad_value = vocab['en'].tokens_to_ids('<pad>')
+    de_pad_value = vocab['de'].tokens_to_ids('<pad>')
 
-    dataset = dataset.map(tokenizer, language)
-    return dataset.map(text.Lookup(vocab), language)
+    en_lookup_op = text.Lookup(vocab['en'], unknown_token='<unk>')
+    de_lookup_op = text.Lookup(vocab['de'], unknown_token='<unk>')
+
+    dataset = dataset.map([en_lookup_op], 'en')
+    dataset = dataset.map([de_lookup_op], 'de')
+
+    en_pad_op = transforms.PadEnd([max_len], en_pad_value)
+    de_pad_op = transforms.PadEnd([max_len], de_pad_value)
+
+    dataset = dataset.map([en_pad_op], 'en')
+    dataset = dataset.map([de_pad_op], 'de')
+
+    dataset = dataset.batch(batch_size, drop_remainder=drop_remainder)
+    return dataset

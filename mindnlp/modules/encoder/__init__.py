@@ -17,6 +17,4 @@ Encoder class
 """
 
 from .rnn_encoder import RNNEncoder
-from .lstm_encoder import LSTMEncoder
-from .gru_encoder import GRUEncoder
 from .cnn_encoder import CNNEncoder

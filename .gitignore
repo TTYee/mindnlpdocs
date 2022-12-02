@@ -66,6 +66,7 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+docs/build
 
 # PyBuilder
 target/
@@ -125,7 +126,10 @@ save/
 
 # dataset
 data/
+save/
 
+# ms files
+kernel_meta/
+rank_0/
 
-# docs/build
-docs/build
+.vscode/

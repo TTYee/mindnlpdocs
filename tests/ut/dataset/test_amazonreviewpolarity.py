@@ -13,12 +13,16 @@
 # limitations under the License.
 # ============================================================================
 """
-Test AmazonReviewFull
+Test AmazonReviewPolarity
 """
 import os
+import shutil
 import unittest
-from mindnlp.dataset import AmazonReviewPolarity
-from mindnlp.dataset import load
+import pytest
+import mindspore as ms
+from mindnlp.dataset import AmazonReviewPolarity, AmazonReviewPolarity_Process
+from mindnlp.dataset import load, process
+from mindnlp.dataset.transforms import BasicTokenizer
 
 
 class TestAmazonReviewPolarity(unittest.TestCase):
@@ -26,32 +30,76 @@ class TestAmazonReviewPolarity(unittest.TestCase):
     Test AmazonReviewPolarity
     """
 
-    def setUp(self):
-        self.input = None
+    @classmethod
+    def setUpClass(cls):
+        cls.root = os.path.join(os.path.expanduser("~"), ".mindnlp")
 
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.root)
+
+    @pytest.mark.dataset
+    @pytest.mark.local
     def test_amazonreviewpolarity(self):
         """Test amazonreviewpolarity"""
         num_lines = {
             "train": 3600000,
             "test": 400000,
         }
-        root = os.path.join(os.path.expanduser("~"), ".mindnlp")
         dataset_train, dataset_test = AmazonReviewPolarity(
-            root=root, split=("train", "test")
+            root=self.root, split=("train", "test")
         )
         assert dataset_train.get_dataset_size() == num_lines["train"]
         assert dataset_test.get_dataset_size() == num_lines["test"]
 
-        dataset_train = AmazonReviewPolarity(root=root, split="train")
-        dataset_test = AmazonReviewPolarity(root=root, split="test")
+        dataset_train = AmazonReviewPolarity(root=self.root, split="train")
+        dataset_test = AmazonReviewPolarity(root=self.root, split="test")
         assert dataset_train.get_dataset_size() == num_lines["train"]
         assert dataset_test.get_dataset_size() == num_lines["test"]
 
-    def test_amazonreviewfull_by_register(self):
-        """test amazonreviewfull by register"""
-        root = os.path.join(os.path.expanduser("~"), ".mindnlp")
+    @pytest.mark.dataset
+    @pytest.mark.local
+    def test_amazonreviewpolarity_by_register(self):
+        """test amazonreviewpolarity by register"""
         _ = load(
-            "AmazonReviewFull",
-            root=root,
+            "AmazonReviewPolarity",
+            root=self.root,
             split=("train", "test"),
         )
+
+
+    @pytest.mark.dataset
+    @pytest.mark.local
+    def test_amazonreviewpolarity_process(self):
+        r"""
+        Test AmazonReviewPolarity_Process
+        """
+
+        train_dataset, _ = AmazonReviewPolarity()
+        train_dataset, vocab = AmazonReviewPolarity_Process(train_dataset)
+
+        train_dataset =train_dataset.create_tuple_iterator()
+        assert (next(train_dataset)[1]).dtype == ms.int32
+
+        for _, value in vocab.vocab().items():
+            assert isinstance(value, int)
+            break
+
+    @pytest.mark.dataset
+    @pytest.mark.local
+    def test_amazonreviewpolarity_process_by_register(self):
+        """test AmazonReviewPolarity process by register"""
+        train_dataset, _ = AmazonReviewPolarity()
+        train_dataset, vocab = process('AmazonReviewPolarity',
+                                dataset=train_dataset,
+                                column="title_text",
+                                tokenizer=BasicTokenizer(),
+                                vocab=None
+                                )
+
+        train_dataset = train_dataset.create_tuple_iterator()
+        assert (next(train_dataset)[1]).dtype == ms.int32
+
+        for _, value in vocab.vocab().items():
+            assert isinstance(value, int)
+            break

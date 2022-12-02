@@ -16,32 +16,35 @@
 Callback for load and save checkpoint.
 """
 import os
+
 import mindspore
 from mindnlp.abc import Callback
 
 
 class CheckpointCallback(Callback):
-    r"""
+    """
     Save checkpoint of the model. save the current Trainer state at the end of each epoch, which can be used to
     resume previous operations.
     Continue training a sample code using the most recent epoch
 
     Args:
         save_path (str): The path to save the state. A specific path needs to be specified,
-                         such as 'checkpoints/chtp.pt'. If it is checked that the file exists,
-                         it will automatically start running from this Checkpoint
-                         when the Trainer starts training. Default: None.
+            such as 'checkpoints/chtp.pt'. If it is checked that the file exists,
+            it will automatically start running from this Checkpoint
+            when the Trainer starts training. Default: None.
         epochs (int): Save a checkpoint file every n epochs.
-
+        keep_checkpoint_max (int): Save checkpoint files at most. Default:5.
 
     """
-    def __init__(self, save_path=None, epochs=None):
+    def __init__(self, save_path=None, epochs=None, keep_checkpoint_max=5):
         if save_path is not None:
             os.makedirs(save_path, exist_ok=True)
         else:
             os.makedirs(os.path.expanduser('~'), exist_ok=True)
         self.save_path = save_path
         self.epochs = epochs
+        self.keep_checkpoint_max = keep_checkpoint_max
+        self.checkpoint_nums = 0
 
         # to do
 
@@ -54,12 +57,28 @@ class CheckpointCallback(Callback):
         #                         you must assign one of them.")
 
     def train_begin(self, run_context):
+        """
+        Notice the file saved path of checkpoints at the beginning of training.
+
+        Args:
+            run_context (RunContext): Information about the model.
+
+        """
+        if self.epochs is None:
+            print('For saving checkpoints, epoch cannont be `None` !')
         print(f"\nThe train will start from the checkpoint saved in {self.save_path}.\n")
 
     def train_epoch_end(self, run_context):
-        r"""
-        Save checkpoint every n epochs at the end of the epoch.
         """
+        Save checkpoint every n epochs at the end of the epoch.
+
+        Args:
+            run_context (RunContext): Information about the model.
+
+        """
+        if self.checkpoint_nums == self.keep_checkpoint_max:
+            print('The maximum number of stored checkpoints has been reached.')
+            return
         if self.epochs is None:
             return
         if (run_context.cur_epoch_nums % self.epochs != 0) & (run_context.cur_epoch_nums != run_context.epochs):
@@ -67,4 +86,5 @@ class CheckpointCallback(Callback):
         model = run_context.network
         ckpt_name = type(model).__name__ + '_epoch_' + str(run_context.cur_epoch_nums-1) + '.ckpt'
         mindspore.save_checkpoint(model, self.save_path + '/' + ckpt_name)
+        self.checkpoint_nums += 1
         print(f"Checkpoint: {ckpt_name} has been saved in epoch:{run_context.cur_epoch_nums - 1}.")

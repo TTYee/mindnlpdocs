@@ -16,9 +16,13 @@
 Test STSB
 """
 import os
+import shutil
 import unittest
-from mindnlp.dataset import STSB
-from mindnlp.dataset import load
+import pytest
+import mindspore as ms
+from mindnlp.dataset import STSB, STSB_Process
+from mindnlp.dataset import load, process
+from mindnlp.dataset.transforms import BasicTokenizer
 
 
 class TestSTSB(unittest.TestCase):
@@ -26,9 +30,15 @@ class TestSTSB(unittest.TestCase):
     Test STSB
     """
 
-    def setUp(self):
-        self.input = None
+    @classmethod
+    def setUpClass(cls):
+        cls.root = os.path.join(os.path.expanduser("~"), ".mindnlp")
 
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.root)
+
+    @pytest.mark.dataset
     def test_stsb(self):
         """Test stsb"""
         num_lines = {
@@ -36,26 +46,61 @@ class TestSTSB(unittest.TestCase):
             "dev": 1500,
             "test": 1379,
         }
-        root = os.path.join(os.path.expanduser("~"), ".mindnlp")
         dataset_train, dataset_dev, dataset_test = STSB(
-            root=root, split=("train", "dev", "test")
+            root=self.root, split=("train", "dev", "test")
         )
         assert dataset_train.get_dataset_size() == num_lines["train"]
         assert dataset_dev.get_dataset_size() == num_lines["dev"]
         assert dataset_test.get_dataset_size() == num_lines["test"]
 
-        dataset_train = STSB(root=root, split="train")
-        dataset_dev = STSB(root=root, split="dev")
-        dataset_test = STSB(root=root, split="test")
+        dataset_train = STSB(root=self.root, split="train")
+        dataset_dev = STSB(root=self.root, split="dev")
+        dataset_test = STSB(root=self.root, split="test")
         assert dataset_train.get_dataset_size() == num_lines["train"]
         assert dataset_dev.get_dataset_size() == num_lines["dev"]
         assert dataset_test.get_dataset_size() == num_lines["test"]
 
+    @pytest.mark.dataset
     def test_agnews_by_register(self):
         """test agnews by register"""
-        root = os.path.join(os.path.expanduser("~"), ".mindnlp")
         _ = load(
             "STSB",
-            root=root,
+            root=self.root,
             split=("train", "dev", "test"),
         )
+
+    @pytest.mark.dataset
+    def test_stsb_process(self):
+        r"""
+        Test STSB_Process
+        """
+
+        train_dataset, _, _ = STSB()
+        train_dataset, vocab = STSB_Process(train_dataset)
+
+        train_dataset = train_dataset.create_tuple_iterator()
+        assert (next(train_dataset)[2]).dtype == ms.int32
+        assert (next(train_dataset)[3]).dtype == ms.int32
+
+        for _, value in vocab.vocab().items():
+            assert isinstance(value, int)
+            break
+
+    @pytest.mark.dataset
+    def test_stsb_process_by_register(self):
+        """test stsb process by register"""
+        train_dataset, _, _ = STSB()
+        train_dataset, vocab = process('STSB',
+                                dataset=train_dataset,
+                                column=("sentence1", "sentence2"),
+                                tokenizer=BasicTokenizer(),
+                                vocab=None
+                                )
+
+        train_dataset = train_dataset.create_tuple_iterator()
+        assert (next(train_dataset)[2]).dtype == ms.int32
+        assert (next(train_dataset)[3]).dtype == ms.int32
+
+        for _, value in vocab.vocab().items():
+            assert isinstance(value, int)
+            break

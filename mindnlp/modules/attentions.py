@@ -18,6 +18,7 @@ from typing import Optional
 import mindspore
 import mindspore.numpy as mnp
 from mindspore import Parameter, ops, nn
+from mindspore.common.initializer import initializer, Uniform
 
 class ScaledDotAttention(nn.Cell):
     r"""
@@ -33,26 +34,27 @@ class ScaledDotAttention(nn.Cell):
             E.g. rate=0.9, dropping out 10% of input units. Default: 0.9.
 
     Inputs:
-        - **query** (mindspore.Tensor) - The query vector.
-        - **key** (mindspore.Tensor) - The key vector.
-        - **value** (mindspore.Tensor) - The value vector.
-        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector.
+        - **query** (mindspore.Tensor) - The query vector. [batch_size, query_size, hidden_size]
+        - **key** (mindspore.Tensor) - The key vector. [batch_size, key_size, hidden_size]
+        - **value** (mindspore.Tensor) - The value vector. [batch_size, seq_len, value_hidden_size]
+        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector. [batch_size, query_size, key_size]
 
     Returns:
-        - **output** (mindspore.Tensor) - The output of the attention.
-        - **attn** (mindspore.Tensor) - The last layer of attention weights
-
+        - output (mindspore.Tensor) - The output of linear attention.  [batch_size, query_size, value_hidden_size]
+        - attn (mindspore.Tensor) - The last layer of attention weights. [batch_size, query_size, key_size]
     Examples:
         >>> import mindspore
         >>> from mindspore import Tensor
-        >>> from mindspore.text.modules.attentions import SclaedDotAttention
+        >>> from mindspore.text.modules.attentions import ScaledDotAttention
         >>> model = ScaledDotAttention(dropout=0.9)
-        >>> q = Tensor(np.ones((2, 1024, 512)), mindspore.float32)
-        >>> k = Tensor(np.ones((2, 1024, 512)), mindspore.float32)
-        >>> v = Tensor(np.ones((2, 1024, 512)), mindspore.float32)
-        >>> output, _ = model(q, k, v)
+        >>> q = Tensor(np.ones((2, 32, 512)), mindspore.float32)
+        >>> k = Tensor(np.ones((2, 20, 512)), mindspore.float32)
+        >>> v = Tensor(np.ones((2, 20, 400)), mindspore.float32)
+        >>> output, att = model(q, k, v)
         >>> print(output.shape)
-        (2, 1024, 512)
+        # (2, 1024, 512)
+        >>> print(att.shape)
+        # (2, 1024, 32)
     """
 
     def __init__(self, dropout=0.9):
@@ -73,7 +75,7 @@ class ScaledDotAttention(nn.Cell):
 class AdditiveAttention(nn.Cell):
     r"""
     Additive Attention
-    Additive Attention proposed in "Neural Machine Translation by Jointly Learning to Align and Translate" paper"
+    Additive Attention proposed in "Neural Machine Translation by Jointly Learning to Align and Translate" paper
 
       .. math::
 
@@ -85,14 +87,14 @@ class AdditiveAttention(nn.Cell):
             E.g. rate=0.9, dropping out 10% of input units. Default: 0.9.
 
     Inputs:
-        - **query** (mindspore.Tensor) - The query vector.
-        - **key** (mindspore.Tensor) - The key vector.
-        - **value** (mindspore.Tensor) - The value vector.
-        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector.
+        - **query** (mindspore.Tensor) - The query vector. [batch_size, query_size, hidden_size]
+        - **key** (mindspore.Tensor) - The key vector. [batch_size, key_size, hidden_size]
+        - **value** (mindspore.Tensor) - The value vector. [batch_size, seq_len, value_hidden_size]
+        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector. [batch_size, query_size, key_size]
 
     Returns:
-        - **output** (mindspore.Tensor) - The output of the attention.
-        - **attn** (mindspore.Tensor) - The last layer of attention weights
+        - output (mindspore.Tensor) - The output of linear attention.  [batch_size, query_size, value_hidden_size]
+        - attn (mindspore.Tensor) - The last layer of attention weights. [batch_size, query_size, key_size]
 
     Examples:
         >>> import mindspore
@@ -110,15 +112,13 @@ class AdditiveAttention(nn.Cell):
     """
     def __init__(self, hidden_dims, dropout=0.9):
         super().__init__()
-        self.hidden_dims = hidden_dims
         self.w_q = nn.Dense(hidden_dims, hidden_dims, has_bias=False)
         self.w_k = nn.Dense(hidden_dims, hidden_dims, has_bias=False)
-        self.w_output = nn.Dense(hidden_dims, 1, has_bias=False)
+        self.w_output = nn.Dense(hidden_dims, 1, has_bias=True)
         self.dropout = nn.Dropout(keep_prob=1-dropout)
         self.tanh = nn.Tanh()
         # Set bias parameter
-        uniformreal = ops.UniformReal(seed=114514)
-        bias_layer = uniformreal((hidden_dims,))
+        bias_layer = initializer(Uniform(scale=0.1), [hidden_dims], mindspore.float32)
         self.bias = Parameter(bias_layer)
         self.softmax = nn.Softmax(axis=-1)
 
@@ -140,7 +140,7 @@ class AdditiveAttention(nn.Cell):
 class CosineAttention(nn.Cell):
     r"""
     Cosine Attention
-    Cosine Attention proposed in "Neural Turing Machines" paper"
+    Cosine Attention proposed in "Neural Turing Machines" paper
 
       .. math::
 
@@ -153,15 +153,14 @@ class CosineAttention(nn.Cell):
             E.g. rate=0.9, dropping out 10% of input units. Default: 0.9.
 
     Inputs:
-        - **query** (mindspore.Tensor) - The query vector.
-        - **key** (mindspore.Tensor) - The key vector.
-        - **value** (mindspore.Tensor) - The value vector.
-        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector.
+        - **query** (mindspore.Tensor) - The query vector. [batch_size, query_size, hidden_size]
+        - **key** (mindspore.Tensor) - The key vector. [batch_size, key_size, hidden_size]
+        - **value** (mindspore.Tensor) - The value vector. [batch_size, seq_len, value_hidden_size]
+        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector. [batch_size, query_size, key_size]
 
     Returns:
-        - **output** (mindspore.Tensor) - The output of the attention.
-        - **attn** (mindspore.Tensor) - The last layer of attention weights
-
+        - output (mindspore.Tensor) - The output of linear attention.  [batch_size, query_size, value_hidden_size]
+        - attn (mindspore.Tensor) - The last layer of attention weights. [batch_size, query_size, key_size]
     Examples:
         >>> import mindspore
         >>> from mindspore import Tensor
@@ -200,18 +199,16 @@ def _masked_softmax(tensor, mask):
     """
     Calculate the softmax weight of tensor under mask.
     """
-
-    softmax = ops.Softmax()
+    softmax = ops.Softmax(axis=-1)
     tensor_shape = tensor.shape
     reshaped_tensor = tensor.view(-1, tensor_shape[-1])
     while mask.ndim < tensor.ndim:
         mask = ops.expand_dims(mask, 1)
     mask = mask.expand_as(tensor)
-    mask_shape = mask.shape
-    reshaped_mask = mask.view(-1, mask_shape[-1])
+    reshaped_mask = mask.view(-1, mask.shape[-1])
     result = softmax(reshaped_tensor * reshaped_mask)
     result = result * reshaped_tensor
-    #To avoid the divisions by zeros case
+    # Avoid the divisions by zeros case
     result = result / (result.sum(axis=-1, keepdims=True) + 1e-13)
     return result.view(tensor_shape)
 
@@ -219,10 +216,11 @@ def _weighted_sum(tensor, weights, mask):
     """
     Calculate the weighted sum of tensor and weight under mask.
     """
-    w_sum = ops.matmul(weights, tensor)
+    batmatmul = ops.BatchMatMul()
+    w_sum = batmatmul(weights, tensor)
     while mask.ndim < tensor.ndim:
         mask = ops.expand_dims(mask, 1)
-    mask = mask.swapaxes(-1, -2)
+    mask = ops.transpose(mask, (0, -1, -2))
     mask = mask.expand_as(w_sum)
     return w_sum * mask
 
@@ -259,7 +257,7 @@ class BinaryAttention(nn.Cell):
         >>> from mindspore import Tensor
         >>> from mindspore.text.modules.attentions import BinaryAttention
         >>> model = BinaryAttention()
-        >>> standard_normal = ops.StandardNormal(seed=114514)
+        >>> standard_normal = ops.StandardNormal(seed=0)
         >>> x = standard_normal((2, 30, 512))
         >>> y = standard_normal((2, 20, 512))
         >>> x_mask = Tensor(np.zeros_like(x.shape[:-1]), mindspore.float32)
@@ -274,9 +272,9 @@ class BinaryAttention(nn.Cell):
         self.bmm = ops.BatchMatMul()
 
     def construct(self, x_batch, x_mask, y_batch, y_mask):
-        similarity_matrix = self.bmm(x_batch, y_batch.swapaxes(2, 1))
+        similarity_matrix = self.bmm(x_batch, ops.transpose(y_batch, (0, 2, 1)))
         x_y_attn = _masked_softmax(similarity_matrix, y_mask)
-        y_x_attn = _masked_softmax(similarity_matrix.swapaxes(1, 2), x_mask)
+        y_x_attn = _masked_softmax(ops.transpose(similarity_matrix, (0, 2, 1)), x_mask)
         attended_x = _weighted_sum(y_batch, x_y_attn, x_mask)
         attended_y = _weighted_sum(x_batch, y_x_attn, y_mask)
         return attended_x, attended_y
@@ -294,10 +292,10 @@ class MutiHeadAttention(nn.Cell):
         - **attention_mode** (str) - attention mode. Default: "dot".
 
     Inputs:
-        - **query** (mindspore.Tensor) - The query vector.
-        - **key** (mindspore.Tensor) - The key vector.
+        - **query** (mindspore.Tensor) - The query vector. Usually is [batch_size, seq_len, d_model]
+        - **key** (mindspore.Tensor) - The key vector. Usually is [batch_size, seq_len, d_model]
         - **value** (mindspore.Tensor) - The value vector. [batch_size, seq_len, d_model]
-        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector. [seq_len, seq_len, batch_size]
+        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector. [batch_size, seq_len, seq_len]
 
     Returns:
         - output (mindspore.Tensor) - The output of muti-head attention.
@@ -309,7 +307,7 @@ class MutiHeadAttention(nn.Cell):
         >>> from mindspore import ops
         >>> from mindspore import Tensor
         >>> from mindspore.text.modules.attentions import MutiHeadAttention
-        >>> standard_normal = ops.StandardNormal(seed=114514)
+        >>> standard_normal = ops.StandardNormal(seed=0)
         >>> # query is [batch_size, seq_len_q, hidden_size]
         >>> q = standard_normal((2, 32, 512))
         >>> # key is [batch_size, seq_len_k, hidden_size]
@@ -322,14 +320,14 @@ class MutiHeadAttention(nn.Cell):
         >>> # [batch_size, seq_len_q, seq_len_k]
         >>> mask_shape = (2, 32, 20)
         >>> mask = Tensor(np.ones(mask_shape), mindspore.bool_)
-        >>> #use additive attention
+        >>> # use additive attention
         >>> net = MutiHeadAttention(heads=8, attention_mode="add")
         >>> x, attn = net(query, key, value, mask)
         >>> print(x.shape, attn.shape)
         (2, 32, 512) (2, 8, 32, 20)
     """
 
-    def __init__(self, heads=8, d_model=512, dropout_rate=0.1, bias=True, attention_mode="dot"):
+    def __init__(self, heads=8, d_model=512, dropout=0.9, bias=False, attention_mode="dot"):
         super().__init__()
         if d_model % heads != 0:
             raise ValueError(f"'d_model' must be divisible when divided by 'heads'. "
@@ -344,11 +342,11 @@ class MutiHeadAttention(nn.Cell):
         # default attention mode dot product
         # attention_mode can be switch to other attention modes
         if "add" in attention_mode.lower():
-            self.attention_mode = AdditiveAttention(hidden_dims=int(self.d_model / self.heads), dropout=1-dropout_rate)
+            self.attention_mode = AdditiveAttention(hidden_dims=int(self.d_model / self.heads), dropout=dropout)
         elif "cos" in attention_mode.lower():
-            self.attention_mode = CosineAttention(dropout=1-dropout_rate)
+            self.attention_mode = CosineAttention(dropout=dropout)
         else:
-            self.attention_mode = ScaledDotAttention(1-dropout_rate)
+            self.attention_mode = ScaledDotAttention(dropout=dropout)
 
 
     def construct(self, query, key, value, mask: Optional[mindspore.Tensor] = None):
@@ -382,7 +380,7 @@ class SelfAttention(nn.Cell):
         - **query** (mindspore.Tensor) - The query vector.
         - **key** (mindspore.Tensor) - The key vector.
         - **value** (mindspore.Tensor) - The value vector. [batch_size, seq_len, d_model]
-        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector. [seq_len, seq_len, batch_size]
+        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector. [batch_size, seq_len, seq_len]
 
     Returns:
         - output (mindspore.Tensor) - The output of self attention.
@@ -394,7 +392,7 @@ class SelfAttention(nn.Cell):
         >>> from mindspore import ops
         >>> from mindspore import Tensor
         >>> from mindspore.text.modules.attentions import SelfAttention
-        >>> standard_normal = ops.StandardNormal(seed=114514)
+        >>> standard_normal = ops.StandardNormal(seed=0)
         >>> query = standard_normal((2, 32, 512))
         >>> key = standard_normal((2, 20, 512))
         >>> value = standard_normal((2, 20, 512))
@@ -405,7 +403,7 @@ class SelfAttention(nn.Cell):
         >>> print(x.shape, attn.shape)
         (2, 32, 512) (2, 32, 20)
     """
-    def __init__(self, d_model=512, dropout_rate=0.1, bias=True, attention_mode="dot"):
+    def __init__(self, d_model=512, dropout_rate=0.1, bias=False, attention_mode="dot"):
         super().__init__()
         self.d_model = d_model
         self.linear_query = nn.Dense(d_model, d_model, has_bias=bias)
@@ -432,9 +430,7 @@ class LocationAwareAttention(nn.Cell):
     Location Aware Attention proposed in "Attention-Based Models for Speech Recognition"
 
     Args:
-        decoder_dim (int): The dimension of the decoder hidden states
-        encoder_dim (int): The dimension of the encoder hidden states
-        attn_dim (int): The dimension of the attention hidden states
+        hidden_dim (int): The dimension of the hidden states
         smoothing (bool): Smoothing label from "Attention-Based Models for Speech Recognition"
 
     Inputs:
@@ -451,41 +447,35 @@ class LocationAwareAttention(nn.Cell):
         >>> import mindspore.numpy as np
         >>> from mindspore import ops, Tensor
         >>> from mindspore.text.modules.attentions import LocationAwareAttention
-        >>> batch_size, seq_len, enc_d, dec_d, conv_d, attn_d = 2, 40, 32, 20, 10, 512
-        >>> standard_normal = ops.StandardNormal(seed=114514)
-        >>> query = standard_normal((batch_size, 1, dec_d))
-        >>> value = standard_normal((batch_size, seq_len, enc_d))
+        >>> hidden_dim = 20
+        >>> standard_normal = ops.StandardNormal(seed=0)
+        >>> query = standard_normal((batch_size, 1, hidden_dims))
+        >>> value = standard_normal((batch_size, seq_len, hidden_dims))
         >>> last_attn = standard_normal((batch_size, seq_len))
         >>> net = LocationAwareAttention(
-            decoder_dim=dec_d,
-            encoder_dim=enc_d,
-            conv_dim=conv_d,
-            attn_dim=attn_d,
+            hidden_dim=20,
             smoothing=False)
         >>> mask_shape = (batch_size, seq_len)
         >>> mask = Tensor(np.ones(mask_shape), mindspore.bool_)
         >>> net.set_mask(mask)
         >>> cont, attn = net(query, value, last_attn)
         >>> print(cont.shape, attn.shape)
-        (2, 1, 32) (2, 40)
+        (2, 1, 20) (2, 40)
     """
 
-    def __init__(self, decoder_dim, encoder_dim, attn_dim, smoothing=False):
+    def __init__(self, hidden_dim, smoothing=False):
         super().__init__()
-        self.decoder_dim = decoder_dim
-        self.encoder_dim = encoder_dim
-        self.attn_dim = attn_dim
+        self.hidden_dim = hidden_dim
         self.smoothing = smoothing
         self.conv = nn.Conv1d(
-            in_channels=1, out_channels=self.attn_dim, kernel_size=3, pad_mode="pad", padding=1)
-        self.w_linear = nn.Dense(self.decoder_dim, self.attn_dim, has_bias=False)
-        self.v_linear = nn.Dense(self.encoder_dim, self.attn_dim, has_bias=False)
-        self.fc_linear = nn.Dense(attn_dim, 1, has_bias=True)
+            in_channels=1, out_channels=hidden_dim, kernel_size=3, pad_mode="pad", padding=1, has_bias=True)
+        self.w_linear = nn.Dense(hidden_dim, hidden_dim, has_bias=False)
+        self.v_linear = nn.Dense(hidden_dim, hidden_dim, has_bias=False)
+        self.fc_linear = nn.Dense(hidden_dim, 1, has_bias=True)
         # Set bias parameter
-        uniformreal = ops.UniformReal(seed=114514)
-        bias_layer = uniformreal((attn_dim,))
+        uniformreal = ops.UniformReal(seed=0)
+        bias_layer = uniformreal((hidden_dim,))
         self.bias = Parameter(bias_layer)
-
         self.tanh = nn.Tanh()
         self.softmax = nn.Softmax(axis=-1)
         self.mask = None
@@ -505,14 +495,14 @@ class LocationAwareAttention(nn.Cell):
         Location aware attention network construction.
         """
         batch_size, seq_len = query.shape[0], value.shape[1]
+        if last_attn is None:
+            last_attn = ops.zeros(batch_size, seq_len)
         conv_attn = self.conv(ops.expand_dims(last_attn, 1)).swapaxes(1, 2)
         scores = self.fc_linear(
             self.tanh(
                 self.w_linear(query) + self.v_linear(value) + conv_attn + self.bias
             )
         ).squeeze(-1)
-        if last_attn is None:
-            last_attn = ops.zeros(batch_size, seq_len)
         if self.mask is not None:
             scores = ops.masked_fill(scores, self.mask == 0, -1e9)
         if self.smoothing:
@@ -525,7 +515,7 @@ class LocationAwareAttention(nn.Cell):
 
 class LinearAttention(nn.Cell):
     r"""
-    Linear attention computes attention between a vector and a matrix using a linear attention function.
+    Linear attention computes attention by concat the query and key vector.
 
     Args:
         - **query_size** (int) - The sentence length of `query`. Usually query.shape[-2]
@@ -534,22 +524,22 @@ class LinearAttention(nn.Cell):
         - **dropout** (float): The keep rate, greater than 0 and less equal than 1. Default: 0.9.
 
     Inputs:
-        - **query** (mindspore.Tensor) - The query vector.
-        - **key** (mindspore.Tensor) - The key vector.
-        - **value** (mindspore.Tensor) - The value vector. [seq_len, batch_size, d_model]
-        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector. [seq_len, seq_len, batch_size]
+        - **query** (mindspore.Tensor) - The query vector. [batch_size, query_size, hidden_size]
+        - **key** (mindspore.Tensor) - The key vector. [batch_size, key_size, hidden_size]
+        - **value** (mindspore.Tensor) - The value vector. [batch_size, seq_len, value_hidden_size]
+        - **mask** Optional[mindspore.Tensor[bool]] - The mask vector. [batch_size, query_size, key_size]
 
     Returns:
-        - output (mindspore.Tensor) - The output of linear attention.
-        - attn (mindspore.Tensor) - The last layer of attention weights
+        - output (mindspore.Tensor) - The output of linear attention.  [batch_size, query_size, value_hidden_size]
+        - attn (mindspore.Tensor) - The last layer of attention weights. [batch_size, query_size, key_size]
 
     Examples:
         >>> import mindspore
         >>> import mindspore.numpy as np
         >>> from mindspore import ops
         >>> from mindspore import Tensor
-        >>> from mindspore.text.modules.attentions import SelfAttention
-        >>> standard_normal = ops.StandardNormal(seed=114514)
+        >>> from mindspore.text.modules.attentions import LinearAttention
+        >>> standard_normal = ops.StandardNormal(seed=0)
         >>> query = standard_normal((2, 32, 512))
         >>> key = standard_normal((2, 20, 512))
         >>> value = standard_normal((2, 20, 500))
@@ -557,10 +547,10 @@ class LinearAttention(nn.Cell):
         >>> mask_shape = (2, 32, 20)
         >>> mask = Tensor(np.ones(mask_shape), mindspore.bool_)
         >>> output, attn = net(query, key, value, mask)
-        >>> print(x.shape, attn.shape)
+        >>> print(output.shape, attn.shape)
         (2, 32, 512) (2, 32, 20)
     """
-    def __init__(self, batch_size, query_dim, key_dim, hidden_dim, dropout=0.9):
+    def __init__(self, query_dim, key_dim, hidden_dim, dropout=0.9):
         super().__init__()
         self.w_linear = nn.Dense(query_dim + key_dim, query_dim, has_bias=False)
         self.softmax = nn.Softmax(axis=-1)
@@ -568,9 +558,8 @@ class LinearAttention(nn.Cell):
         self.v_linear = nn.Dense(hidden_dim, key_dim, has_bias=False)
         self.dropout = nn.Dropout(keep_prob=1-dropout)
         #set bias parameter
-        uniformreal = ops.UniformReal(seed=114514)
-        bias_layer_shape = (batch_size, query_dim, hidden_dim)
-        bias_layer = uniformreal(bias_layer_shape)
+        uniformreal = ops.UniformReal(seed=0)
+        bias_layer = uniformreal((hidden_dim,))
         self.bias = Parameter(bias_layer)
 
     def construct(self, query, key, value, mask: Optional[mindspore.Tensor] = None):

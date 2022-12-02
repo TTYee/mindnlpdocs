@@ -21,55 +21,44 @@ from mindspore import nn
 from mindspore import ops
 import mindspore.numpy as mnp
 from mindnlp.abc import DecoderBase
-from mindnlp.modules.attentions import ScaledDotAttention
 
 class RNNDecoder(DecoderBase):
     r"""
-    RNN Decoder.
-
-    Apply RNN layer with :math:`\tanh` or :math:`\text{ReLU}` non-linearity to the input.
-
-    For each element in the input sequence, each layer computes the following function:
-
-    .. math::
-        h_t = activation(W_{ih} x_t + b_{ih} + W_{hh} h_{(t-1)} + b_{hh})
-
-    Here :math:`h_t` is the hidden state at time `t`, :math:`x_t` is
-    the input at time `t`, and :math:`h_{(t-1)}` is the hidden state of the
-    previous layer at time `t-1` or the initial hidden state at time `0`.
-    If :attr:`nonlinearity` is ``'relu'``, then :math:`\text{ReLU}` is used instead of :math:`\tanh`.
+    Seq2Seq Decoder.
 
     Args:
-        vocab_size (int): Size of the dictionary of embeddings.
-        embedding_size (int): The size of each embedding vector.
-        hidden_size (int):  Number of features of hidden layer.
-        num_layers (int): Number of layers of stacked LSTM . Default: 1.
-        has_bias (bool): Whether the cell has bias `b_ih` and `b_hh`. Default: True.
-        dropout (float, int): If not 0, append `Dropout` layer on the outputs of each
-          LSTM layer except the last layer. Default 0. The range of dropout is [0.0, 1.0).
+        embedding (Cell): The embedding layer.
+        rnns (list): The list of RNN Layers.
+        dropout_in (Union[float, int]): If not 0, append `Dropout` layer on the inputs of each
+            RNN layer. Default 0. The range of dropout is [0.0, 1.0).
+        dropout_out (Union[float, int]): If not 0, append `Dropout` layer on the outputs of each
+            RNN layer except the last layer. Default 0. The range of dropout is [0.0, 1.0).
         attention (bool): Whether to use attention. Default: True.
-        encoder_output_units (int): Number of features of encoder output.
-
-    Inputs:
-        - **prev_output_tokens** (Tensor) - Output tokens for teacher forcing with shape [batch, tgt_len].
-        - **encoder_out** (Tensor) - Output of encoder.
-
-    Outputs:
-        Tuple, a tuple contains (`output`, `attn_scores`).
-
-        - **output** (Tensor) - Tensor of shape (batch, `tgt_len`, `vocab_size`).
-        - **attn_scores** (Tensor) - Tensor of shape (`tgt_len`, batch, `embedding_size`)
-          if attention=True otherwise None.
+        encoder_output_units (int): Number of features of encoder output. Default: 512.
 
     Examples:
-        >>> import numpy as np
-        >>> import mindspore
-        >>> from mindspore import Tensor
-        >>> from text.modules import RNNDecoder
-        >>> rnn_decoder = RNNDecoder(1000, 32, 16, num_layers=2, has_bias=True,
-        ...                          dropout=0.1, attention=True, encoder_output_units=16)
+        >>> vocab_size = 1000
+        >>> embedding_size = 32
+        >>> hidden_size = 16
+        >>> num_layers = 2
+        >>> dropout_in = 0.1
+        >>> dropout_out = 0.1
+        >>> encoder_output_units = 16
+        >>> embedding = nn.Embedding(vocab_size, embedding_size)
+        >>> input_feed_size = 0 if encoder_output_units == 0 else hidden_size
+        >>> rnns = [
+        ...     nn.RNNCell(
+        ...         input_size=embedding_size + input_feed_size
+        ...         if layer == 0
+        ...             else hidden_size,
+        ...         hidden_size=hidden_size
+        ...         )
+        ...         for layer in range(num_layers)
+        >>> ]
+        >>> rnn_decoder = RNNDecoder(embedding, rnns, dropout_in=dropout_in, dropout_out=dropout_out,
+        ...                          attention=True, encoder_output_units=encoder_output_units, mode="RNN")
         >>> tgt_tokens = Tensor(np.ones([8, 16]), mindspore.int32)
-        >>> encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.int32)
+        >>> encoder_output = Tensor(np.ones([8, 16, 16]), mindspore.float32)
         >>> hiddens_n = Tensor(np.ones([2, 8, 16]), mindspore.float32)
         >>> mask = Tensor(np.ones([8, 16]), mindspore.int32)
         >>> output, attn_scores = rnn_decoder(tgt_tokens, (encoder_output, hiddens_n, mask))
@@ -79,82 +68,165 @@ class RNNDecoder(DecoderBase):
         (8, 16, 16)
     """
 
-    def __init__(self, vocab_size, embedding_size, hidden_size, num_layers=1, has_bias=True,
-                 dropout=0, attention=True, encoder_output_units=512):
-        super().__init__()
+    def __init__(self, embedding, rnns, dropout_in=0, dropout_out=0, attention=True,
+                 encoder_output_units=512, mode="RNN"):
+        super().__init__(embedding)
+        self.dropout_in_module = nn.Dropout(1 - dropout_in)
+        self.dropout_out_module = nn.Dropout(1 - dropout_out)
+        self.layers = nn.CellList(rnns)
+        self.num_layers = len(rnns)
+        self.hidden_size = rnns[0].hidden_size
+        self.vocab_size = self.embedding.vocab_size
+        self.is_lstm = mode == "LSTM"
 
-        self.embedding = nn.Embedding(vocab_size, embedding_size)
-        self.dropout = nn.Dropout(1 - dropout)
-        self.rnn = nn.RNN(embedding_size, hidden_size, num_layers=num_layers, has_bias=has_bias,
-                          batch_first=True, dropout=dropout)
+        self.attention = attention
         if attention:
-            self.attention = ScaledDotAttention()
-            self.input_proj = nn.Dense(hidden_size, encoder_output_units)
-            self.output_proj = nn.Dense(hidden_size + encoder_output_units, hidden_size)
-        else:
-            self.attention = None
-        self.fc_out = nn.Dense(hidden_size, vocab_size)
+            self.input_proj = nn.Dense(self.hidden_size, encoder_output_units, has_bias=False)
+            self.output_proj = nn.Dense(self.hidden_size + encoder_output_units, self.hidden_size, has_bias=False)
+            self.softmax = nn.Softmax(axis=1)
+            self.tanh = nn.Tanh()
+
+        self.fc_out = nn.Dense(self.hidden_size, self.vocab_size)
 
     def construct(self, prev_output_tokens, encoder_out=None):
+        """
+        Construct method.
+
+        Args:
+            prev_output_tokens (Tensor): Output tokens for teacher forcing with shape [batch, tgt_len].
+            encoder_out (Tensor): Output of encoder. Default: None.
+
+        Returns:
+            Tuple, a tuple contains (`output`, `attn_scores`).
+
+            - output (Tensor): Tensor of shape (batch, `tgt_len`, `vocab_size`).
+            - attn_scores (Tensor): Tensor of shape (batch, `tgt_len`, `src_len`)
+              if attention=True otherwise None.
+        """
         output, attn_scores = self.extract_features(prev_output_tokens, encoder_out)
         output = self.output_layer(output)
         return output, attn_scores
 
     def _attention_layer(self, hidden, encoder_output, mask):
         """
-        Attention method
+        Attention method.
         """
         # hidden: [batch, hidden_size]
         # encoder_output: [batch, src_len, encoder_output_units]
         # mask: [batch, src_len]
-        src_len = encoder_output.shape[1]
         query = self.input_proj(hidden)  # [batch, encoder_output_units]
-        query = mnp.tile(ops.expand_dims(query, 1), (1, src_len, 1))  # [batch, src_len, encoder_output_units]
-        attn_mask = mnp.tile(ops.expand_dims(mask, 1), (1, src_len, 1))  # [batch, src_len, src_len]
 
-        # output: [batch, src_len, encoder_output_units]
-        # attn_scores: [batch, src_len, src_len]
-        output, attn_scores = self.attention(query, encoder_output, encoder_output, attn_mask)
+        # compute attention
+        attn_scores = (query * encoder_output.transpose((1, 0, 2))).sum(axis=2)  # [src_len, batch]
+        attn_scores = attn_scores.transpose((1, 0))  # [batch, src_len]
 
-        attn_scores = ops.reduce_sum(attn_scores, 1)  # [batch, src_len]
-        output = ops.reduce_sum(output, 1)  # [batch, encoder_output_units]
-        output = self.output_proj(ops.concat((hidden, output), axis=1))  # [batch, hidden_size]
+        # don't attend over padding
+        if mask is not None:
+            attn_scores = ops.masked_fill(attn_scores, mask == 0, float("-inf"))
+
+        attn_scores = self.softmax(attn_scores)  # [batch, src_len]
+
+        # sum weighted sources
+        output = (attn_scores.expand_dims(axis=2) * encoder_output).sum(axis=1)  # [batch, encoder_output_units]
+        output = self.tanh(self.output_proj(ops.concat((output, hidden), axis=1)))  # [batch, hidden_size]
 
         return output, attn_scores
 
     def extract_features(self, prev_output_tokens, encoder_out=None):
         """
-        Extract features of encoder output
+        Extract features of encoder output.
+
+        Args:
+            prev_output_tokens (Tensor): Output tokens for teacher forcing with shape [batch, tgt_len].
+            encoder_out (Tensor): Output of encoder. Default: None.
+
+        Returns:
+            Tuple, a tuple contains (`output`, `attn_scores`).
+
+            - output (Tensor): The extracted feature Tensor of shape (batch, `tgt_len`, `hidden_size`).
+            - attn_scores (Tensor): Tensor of shape (batch, `tgt_len`, `src_len`)
+              if attention=True otherwise None.
         """
+        batch_size, tgt_len = prev_output_tokens.shape
+
+        # embed the target tokens
+        embed_token = self.embedding(prev_output_tokens)  # [batch, tgt_len, embedding_size]
+        embed_token = self.dropout_in_module(embed_token)
+
         # get output from encoder
         if encoder_out is not None:
             encoder_output = encoder_out[0]  # [batch_size, src_len, num_directions * hidden_size]
             encoder_hiddens = encoder_out[1]  # [num_directions * num_layers, batch_size, hidden_size]
             encoder_padding_mask = encoder_out[2]  # [batch, src_len]
+
+            if self.is_lstm:
+                prev_hiddens = [encoder_hiddens[0][i] for i in range(self.num_layers)]
+                prev_cells = [encoder_hiddens[1][i] for i in range(self.num_layers)]
+            else:
+                prev_hiddens = [encoder_hiddens[i] for i in range(self.num_layers)]
+                prev_cells = None
+            input_feed = ops.zeros((batch_size, self.hidden_size), embed_token.dtype)
         else:
             encoder_output = mnp.empty(0)
             encoder_hiddens = mnp.empty(0)
             encoder_padding_mask = mnp.empty(0)
-        tgt_len = prev_output_tokens.shape[1]
 
-        # embed the target tokens
-        embed_token = self.embedding(prev_output_tokens)  # [batch, tgt_len, embedding_size]
-        embed_token = self.dropout(embed_token)
+            zero_state = ops.zeros((batch_size, self.hidden_size), embed_token.dtype)
+            prev_hiddens = [zero_state for _ in range(self.num_layers)]
+            prev_cells = [zero_state for _ in range(self.num_layers)]
+            input_feed = None
 
-        output, _ = self.rnn(embed_token, encoder_hiddens)  # [batch, tgt_len, hidden_size]
+        outs = []
+        attns = []
+        for j in range(tgt_len):
+            # input feeding: concatenate context vector from previous time step
+            if input_feed is not None:
+                # [batch, embedding_size + hidden_size]
+                input_rnn = ops.concat((embed_token[:, j, :], input_feed), axis=1)
+            else:
+                input_rnn = embed_token[:, j, :]  # [batch, embedding_size]
 
-        if self.attention is not None:
-            outs = []
-            attns = []
-            for hidden in ops.split(output, axis=1, output_num=tgt_len):  # [batch, 1, hidden_size]
-                # out: [batch, hidden_size]
-                # scores: [batch, src_len]
-                out, scores = self._attention_layer(ops.squeeze(hidden), encoder_output, encoder_padding_mask)
-                outs.append(out)
-                attns.append(scores)
-            output = ops.stack(outs, 1)  # [batch, tgt_len, hidden_size]
-            attn_scores = ops.stack(attns, 2)  # [batch, src_len, tgt_len]
+            hidden = None
+            cell = None
+            for i , rnn in enumerate(self.layers):
+                # recurrent cell
+                if self.is_lstm:
+                    hidden, cell = rnn(input_rnn, (prev_hiddens[i], prev_cells[i]))  # [batch, hidden_size]
 
+                    # hidden state becomes the input to the next layer
+                    input_rnn = self.dropout_out_module(hidden)
+
+                    # save state for next time step
+                    prev_hiddens[i] = hidden
+                    prev_cells[i] = cell
+                else:
+                    hidden = rnn(input_rnn, prev_hiddens[i])
+
+                    # hidden state becomes the input to the next layer
+                    input_rnn = self.dropout_out_module(hidden)
+
+                    # save state for next time step
+                    prev_hiddens[i] = hidden
+
+            # apply attention using the last layer's hidden state
+            if self.attention:
+                out, attn = self._attention_layer(hidden, encoder_output, encoder_padding_mask)
+            else:
+                out = hidden
+                attn = None
+            out = self.dropout_out_module(out)
+
+            # input feeding
+            if input_feed is not None:
+                input_feed = out
+
+            # save final output
+            outs.append(out)
+            attns.append(attn)
+
+        output = ops.stack(outs, 1)
+        if self.attention:
+            attn_scores = ops.stack(attns, 1)
         else:
             attn_scores = None
 
@@ -162,7 +234,13 @@ class RNNDecoder(DecoderBase):
 
     def output_layer(self, features):
         """
-        Project features to the vocabulary size
+        Project features to the vocabulary size.
+
+        Args:
+            features (Tensor): The extracted feature Tensor.
+
+        Returns:
+            Tensor, the output of decoder.
         """
         output = self.fc_out(features)  # [batch, tgt_len, vocab_size]
         return output

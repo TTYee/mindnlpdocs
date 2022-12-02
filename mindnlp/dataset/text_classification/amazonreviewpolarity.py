@@ -20,9 +20,10 @@ AmazonReviewPolarity dataset
 import os
 import csv
 from typing import Union, Tuple
-from mindspore.dataset import GeneratorDataset
+from mindspore.dataset import GeneratorDataset, text
+from mindnlp.dataset.transforms import BasicTokenizer
 from mindnlp.utils.download import cache_file
-from mindnlp.dataset.register import load
+from mindnlp.dataset.register import load, process
 from mindnlp.configs import DEFAULT_ROOT
 from mindnlp.utils import untar
 
@@ -31,7 +32,7 @@ URL = "https://drive.google.com/uc?export=download&id=0Bz8a_Dbh9QhbaW12WVVZS2drc
 MD5 = "fe39f8b653cada45afd5792e0f0e8f9b"
 
 
-class Amazonreviewfull:
+class Amazonreviewpolarity:
     """
     AmazonReviewPolarity dataset source
     """
@@ -49,7 +50,7 @@ class Amazonreviewfull:
             self._title_text.append(f"{row[1]} {row[2]}")
 
     def __getitem__(self, index):
-        return self._label[index], self._title_text
+        return self._label[index], self._title_text[index]
 
     def __len__(self):
         return len(self._label)
@@ -62,20 +63,24 @@ def AmazonReviewPolarity(
     proxies=None,
 ):
     r"""
-    Load the AmazonReviewPolarity dataset
+    Load the AmazonReviewPolarity datase
+
     Args:
         root (str): Directory where the datasets are saved.
             Default:~/.mindnlp
         split (str|Tuple[str]): Split or splits to be returned.
             Default:('train', 'test').
+        proxies (dict): a dict to identify proxies,for example: {"https": "https://127.0.0.1:7890"}.
 
     Returns:
         - **datasets_list** (list) -A list of loaded datasets.
-            If only one type of dataset is specified,such as 'trian',
-            this dataset is returned instead of a list of datasets.
+          If only one type of dataset is specified,such as 'trian',
+          this dataset is returned instead of a list of datasets.
 
     Examples:
-        >>> dataset_train,dataset_test = AmazonReviewPolarity()
+        >>> root = "~/.mindnlp"
+        >>> split = ('train', 'test')
+        >>> dataset_train,dataset_test = AmazonReviewPolarity(root, split)
         >>> train_iter = dataset_train.create_tuple_iterator()
         >>> print(next(train_iter))
 
@@ -107,9 +112,53 @@ def AmazonReviewPolarity(
     for path in path_list:
         datasets_list.append(
             GeneratorDataset(
-                source=Amazonreviewfull(path), column_names=column_names, shuffle=False
+                source=Amazonreviewpolarity(path), column_names=column_names, shuffle=False
             )
         )
     if len(path_list) == 1:
         return datasets_list[0]
     return datasets_list
+
+@process.register
+def AmazonReviewPolarity_Process(dataset, column="title_text", tokenizer=BasicTokenizer(), vocab=None):
+    """
+    the process of the AmazonReviewPolarity dataset
+
+    Args:
+        dataset (GeneratorDataset): AmazonReviewPolarity dataset.
+        column (str): the column needed to be transpormed of the AmazonReviewPolarity dataset.
+        tokenizer (TextTensorOperation): tokenizer you choose to tokenize the text dataset.
+        vocab (Vocab): vocabulary object, used to store the mapping of token and index.
+
+    Returns:
+        - **dataset** (MapDataset) - dataset after transforms.
+        - **Vocab** (Vocab) - vocab created from dataset
+
+    Raises:
+        TypeError: If `input_column` is not a string.
+
+    Examples:
+        >>> from mindnlp.dataset import AmazonReviewPolarity, AmazonReviewPolarity_Process
+        >>> train_dataset, test_dataset = AmazonReviewPolarity()
+        >>> column = "title_text"
+        >>> tokenizer = BasicTokenizer()
+        >>> amazonreviewpolarity_dataset, vocab = AmazonReviewPolarity_Process(train_dataset, column, tokenizer)
+        >>> amazonreviewpolarity_dataset = amazonreviewpolarity_dataset.create_tuple_iterator()
+        >>> print(next(amazonreviewpolarity_dataset))
+        [Tensor(shape=[], dtype=Int64, value= 2), Tensor(shape=[90], dtype=Int32, value= [277246,     89,
+        14,      1,    680,     16,   7506,     32,    203,    543,     18,    460,     12,     33,   6923,
+        1, 146277,     13,     67,    489,     38,     81,      3,     48,   2004,      9,     89,      5,
+        152,     78,    795,  22921,      0,    170,    137,     12,      3,     28,    567,      1,    170,
+        32075,   4790,     27,     50,      7,     36,      7,      1,    660,      3,     28,    158,    567,
+        9,     54,      1,    112,    137,     12,     33,   7683,    277,     41,   6067,  69373,      4,
+        471,      6,  20149,    991,     21,  10745,   3408,      4,   5257,  24128,      0,     33,     48,
+        5944,    241,     78,   3043,      5,    392,     12,   5075,   1118,   5075])]
+
+    """
+
+    if vocab is None:
+        dataset = dataset.map(tokenizer,  input_columns=column)
+        vocab = text.Vocab.from_dataset(dataset, columns=column)
+        return dataset.map(text.Lookup(vocab), input_columns=column), vocab
+    dataset = dataset.map(tokenizer,  input_columns=column)
+    return dataset.map(text.Lookup(vocab), input_columns=column)
