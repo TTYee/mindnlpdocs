@@ -19,11 +19,11 @@ msgstr ""
 
 #: ../../index.rst:15
 msgid "Overview"
-msgstr "概述"
+msgstr "概述概述概述"
 
 #: ../../index.rst:22
 msgid "Quick Start"
-msgstr "快速开始"
+msgstr "快速开始快速开始"
 
 #: ../../index.rst:31
 msgid "Examples"

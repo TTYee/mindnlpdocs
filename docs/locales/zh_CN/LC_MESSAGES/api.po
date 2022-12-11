@@ -19,7 +19,7 @@ msgstr ""
 
 #: ../../api/abc.rst:2
 msgid "Abstract Class"
-msgstr ""
+msgstr "抽象类"
 
 #: ../../api/abc.rst:5
 msgid "Backbones"
@@ -27,11 +27,11 @@ msgstr ""
 
 #: mindnlp.abc.backbones.base.BaseModel:1 of
 msgid "Basic class for models"
-msgstr ""
+msgstr "模型的基类"
 
 #: mindnlp.abc.backbones.seq2seq.Seq2seqModel:1 of
 msgid "Basic class for seq2seq models"
-msgstr ""
+msgstr "seq2seq模型的基类"
 
 #: mindnlp.abc.backbones.seq2seq.Seq2seqModel
 #: mindnlp.abc.backbones.seq2vec.Seq2vecModel mindnlp.common.loss.CMRC2018Loss
@@ -85,11 +85,11 @@ msgstr ""
 #: mindnlp.abc.backbones.seq2seq.Seq2seqModel:3
 #: mindnlp.abc.backbones.seq2vec.Seq2vecModel:3 of
 msgid "The encoder."
-msgstr ""
+msgstr "编码器"
 
 #: mindnlp.abc.backbones.seq2seq.Seq2seqModel:5 of
 msgid "The decoder."
-msgstr ""
+msgstr "解码器"
 
 #: mindnlp.abc.backbones.seq2seq.Seq2seqModel:13
 #: mindnlp.abc.backbones.seq2vec.Seq2vecModel:14
@@ -118,7 +118,7 @@ msgstr ""
 
 #: mindnlp.abc.backbones.seq2seq.Seq2seqModel:10 of
 msgid "**tgt_tokens** (Tensor) - Tokens of targets with shape [batch, src_len]."
-msgstr ""
+msgstr "**tgt_tokens** (Tensor) - 啦啦啦啦啦啦啦啦啦啦啦啦."
 
 #: mindnlp.abc.backbones.seq2seq.Seq2seqModel:11 of
 msgid ""
