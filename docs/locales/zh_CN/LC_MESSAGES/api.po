@@ -35,7 +35,7 @@ msgstr "模型的基本类"
 #: of mindnlp.abc.backbones.seq2seq.Seq2seqModel:1
 msgid ""
 "Basic class for seq2seq models test1 test1 test1 test1 test2 test2 test2!"
-msgstr ""
+msgstr "用于seq2seq模型的基本类，测试1测试1测试1测试1测试2测试2测试2测试2"
 
 #: ../../../../../../Install/Miniconda3/lib/site-packages/mindnlp/abc/backbones/seq2seq.py:docstring
 #: of mindnlp.abc.backbones.seq2seq.Seq2seqModel:0
@@ -272,7 +272,7 @@ msgstr "参数"
 #: ../../../../../../Install/Miniconda3/lib/site-packages/mindnlp/abc/backbones/seq2seq.py:docstring
 #: of mindnlp.abc.backbones.seq2seq.Seq2seqModel:4
 msgid "The encoder. test3 delete decoder!"
-msgstr ""
+msgstr "编码器。test3删除了解码器"
 
 #: ../../../../../../Install/Miniconda3/lib/site-packages/mindnlp/abc/backbones/seq2vec.py:docstring
 #: of mindnlp.abc.backbones.seq2vec.Seq2vecModel:1
@@ -287,7 +287,7 @@ msgstr "编码器."
 #: ../../../../../../Install/Miniconda3/lib/site-packages/mindnlp/abc/backbones/seq2vec.py:docstring
 #: of mindnlp.abc.backbones.seq2vec.Seq2vecModel:5
 msgid "add one line."
-msgstr ""
+msgstr "test4加了一行内容"
 
 #: ../../../../../../Install/Miniconda3/lib/site-packages/mindnlp/abc/backbones/seq2vec.py:docstring
 #: of mindnlp.abc.backbones.seq2vec.Seq2vecModel:7
