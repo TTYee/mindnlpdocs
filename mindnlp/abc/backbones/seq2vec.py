@@ -26,6 +26,7 @@ class Seq2vecModel(BaseModel):
 
     Args:
         encoder (EncoderBase): The encoder.
+        test4 (test):add one line.
         head (nn.Cell): The module to process encoder output.
         dropout (float): The drop out rate, greater than 0 and less equal than 1.
             If None, not dropping out input units. Drfault: None.

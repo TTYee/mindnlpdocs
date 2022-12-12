@@ -20,11 +20,11 @@ from mindnlp.abc.backbones.base import BaseModel
 
 class Seq2seqModel(BaseModel):
     r"""
-    Basic class for seq2seq models
+    Basic class for seq2seq models test1 test1 test1 test1
+    test2 test2 test2!
 
     Args:
-        encoder (EncoderBase): The encoder.
-        decoder (DecoderBase): The decoder.
+        encoder (EncoderBase): The encoder. test3 delete decoder!
     """
 
     def __init__(self, encoder, decoder):
