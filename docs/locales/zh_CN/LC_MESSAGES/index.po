@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: MindNLP \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2022-12-05 21:43+0800\n"
+"POT-Creation-Date: 2022-12-06 18:04+0800\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -19,11 +19,11 @@ msgstr ""
 
 #: ../../index.rst:15
 msgid "Overview"
-msgstr "概述概述概述"
+msgstr "概述"
 
 #: ../../index.rst:22
 msgid "Quick Start"
-msgstr "快速开始快速开始"
+msgstr "快速开始"
 
 #: ../../index.rst:31
 msgid "Examples"

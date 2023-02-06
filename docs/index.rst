@@ -15,6 +15,7 @@ What is MindNLP
 .. toctree::
    :maxdepth: 1
    :caption: Overview
+   :titlesonly:
 
    overview/about
    overview/prerequisites
@@ -22,17 +23,24 @@ What is MindNLP
 .. toctree::
    :maxdepth: 1
    :caption: Quick Start
+   :titlesonly:
 
    quick_start/first_model
    quick_start/dataset_and_transforms
    quick_start/train_and_eval
    quick_start/modules
+   quick_start/use_metrics
+   quick_start/use_callback
 
 .. toctree::
    :maxdepth: 1
    :caption: Examples
+   :titlesonly:
 
-   examples/sentiment_analysis
+   examples/fasttext
+   examples/sequence_tagging
+   examples/machine_translation
+   examples/question_answer
 
 .. toctree::
    :maxdepth: 1
@@ -43,4 +51,5 @@ What is MindNLP
    api/dataset
    api/engine
    api/modules
+   api/models
    api/utils

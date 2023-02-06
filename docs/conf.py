@@ -45,4 +45,4 @@ html_static_path = ['_static']
 master_doc = 'index'
 
 # multi-language docs
-locale_dirs = ['./locales/'] # the path of zh_CN .po files
+locale_dirs = ['./locales/'] # the path of zh_CN files(.po files)

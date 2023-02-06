@@ -89,6 +89,7 @@ def CoNLL2000Chunking(
 ):
     r"""
     Load the CoNLL2000Chunking dataset
+
     Args:
         root (str): Directory where the datasets are saved.
             Default:~/.mindnlp
@@ -148,6 +149,12 @@ def CoNLL2000Chunking_Process(dataset, vocab, batch_size=64, max_len=500, \
     Args:
         dataset (GeneratorDataset): CoNLL2000Chunking dataset.
         vocab (Vocab): vocabulary object, used to store the mapping of token and index.
+        batch_size (int): The number of rows each batch is created with. Default: 64.
+        max_len (int): The max length of the sentence. Default: 500.
+        bucket_boundaries (list[int]): A list consisting of the upper boundaries of the
+            buckets. Must be strictly increasing. Default: None.
+        drop_remainder (bool): When the last batch of data contains a data entry smaller than batch_size, whether
+            to discard the batch and not pass it to the next operation. Default: False.
 
     Returns:
         - **dataset** (MapDataset) - dataset after transforms.
@@ -156,6 +163,11 @@ def CoNLL2000Chunking_Process(dataset, vocab, batch_size=64, max_len=500, \
         TypeError: If `input_column` is not a string.
 
     Examples:
+        >>> dataset_train,dataset_test = CoNLL2000Chunking()
+        >>> vocab = text.Vocab.from_dataset(dataset_train,columns=["words"],freq_range=None,
+                                    top_k=None,special_tokens=["<pad>","<unk>"],special_first=True)
+        >>> dataset_train = CoNLL2000Chunking_Process(dataset=dataset_train, vocab=vocab,
+                                          batch_size=32, max_len=80)
     """
     columns_to_project = ["words", "chunk_tag"]
     dataset = dataset.project(columns=columns_to_project)

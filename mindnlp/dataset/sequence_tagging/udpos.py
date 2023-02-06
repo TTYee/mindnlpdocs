@@ -13,7 +13,7 @@
 # limitations under the License.
 # ============================================================================
 """
-UDPOS dataset
+UDPOS load function
 """
 # pylint: disable=C0103
 
@@ -77,6 +77,7 @@ def UDPOS(
 ):
     r"""
     Load the UDPOS dataset
+
     Args:
         root (str): Directory where the datasets are saved.
             Default:~/.mindnlp

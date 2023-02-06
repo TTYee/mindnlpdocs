@@ -13,7 +13,7 @@
 # limitations under the License.
 # ============================================================================
 """
-STSB dataset
+STSB load function
 """
 # pylint: disable=C0103
 
@@ -157,12 +157,12 @@ def STSB_Process(dataset,
         for col in column:
             dataset = dataset.map(tokenizer, input_columns=col)
         column = list(column)
-        vocab = text.Vocab.from_dataset(dataset, columns=column)
+        vocab = text.Vocab.from_dataset(dataset, columns=column, special_tokens=["<pad>", "<unk>"])
         for col in column:
-            dataset = dataset.map(text.Lookup(vocab), input_columns=col)
+            dataset = dataset.map(text.Lookup(vocab, unknown_token='<unk>'), input_columns=col)
         return dataset, vocab
     for col in column:
         dataset = dataset.map(tokenizer, input_columns=col)
     for col in column:
-        dataset = dataset.map(text.Lookup(vocab), input_columns=col)
+        dataset = dataset.map(text.Lookup(vocab, unknown_token='<unk>'), input_columns=col)
     return dataset, vocab
