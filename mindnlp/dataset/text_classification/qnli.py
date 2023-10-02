@@ -90,7 +90,7 @@ def QNLI(
 
     Examples:
         >>> root = "~/.mindnlp"
-        >>> split = ("train", "dev, "test")
+        >>> split = ("train", "dev", "test")
         >>> dataset_train,dataset_dev,dataset_test = QNLI(root, split)
         >>> train_iter = dataset_train.create_tuple_iterator()
         >>> print(next(train_iter))
